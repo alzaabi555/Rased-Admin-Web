@@ -3,7 +3,7 @@ import {
   School, LogOut, Users, CheckCircle2, Clock,
   TrendingUp, AlertTriangle, LayoutDashboard, FileText,
   Search, Settings, Calendar as CalendarIcon,
-  ListOrdered, Loader2, UploadCloud, Printer 
+  ListOrdered, Loader2, UploadCloud, Printer, Filter 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -31,8 +31,7 @@ const isSameDate = (dateString: string, compareDate: Date) => {
   return (str.includes(day) || str.includes(arDay)) && (str.includes(month) || str.includes(arMonth));
 };
 
-// 💉 تحديث مُولد الوثائق لدعم تقارير الطلاب والمعلمين معاً
-const generateOfficialReport = (title: string, dataList: any[], schoolName: string, dateStr: string, type: 'students' | 'teachers' = 'students') => {
+const generateOfficialReport = (title: string, dataList: any[], schoolName: string, dateStr: string, type: 'students' | 'teachers' = 'students', periodTitle: string = '') => {
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
     alert('الرجاء السماح بالنوافذ المنبثقة (Pop-ups) لطباعة التقرير.');
@@ -40,12 +39,12 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
   }
 
   let tableHeader = type === 'students' 
-    ? `<tr><th style="width: 5%;">م</th><th style="width: 30%;">اسم الطالب</th><th style="width: 15%;">نوع المخالفة</th><th style="width: 10%;">الفصل</th><th style="width: 25%;">المعلم الراصد</th><th style="width: 15%;">الوقت</th></tr>`
+    ? `<tr><th style="width: 5%;">م</th><th style="width: 25%;">اسم الطالب</th><th style="width: 15%;">المخالفة</th><th style="width: 10%;">الفصل</th><th style="width: 20%;">المعلم الراصد</th><th style="width: 10%;">الحصة</th><th style="width: 15%;">الوقت</th></tr>`
     : `<tr><th style="width: 10%;">م</th><th style="width: 45%;">اسم المعلم </th><th style="width: 25%;">الفصل المسند</th><th style="width: 20%;">حالة الرصد</th></tr>`;
 
   let tableContent = '';
   if (dataList.length === 0) {
-      tableContent = `<tr><td colspan="${type === 'students' ? 6 : 4}" style="text-align:center; padding: 20px; font-weight: bold;">لا يوجد سجلات في هذا التقرير.</td></tr>`;
+      tableContent = `<tr><td colspan="${type === 'students' ? 7 : 4}" style="text-align:center; padding: 20px; font-weight: bold;">لا يوجد سجلات في هذا التقرير.</td></tr>`;
   } else {
       dataList.forEach((item, index) => {
           tableContent += type === 'students' 
@@ -55,6 +54,7 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
                  <td>${item.type || 'غياب / تأخير'}</td>
                  <td>${item.className}</td>
                  <td>${item.teacher}</td>
+                 <td>${item.period || '-'}</td>
                  <td dir="ltr">${item.time}</td>
                </tr>`
             : `<tr>
@@ -77,7 +77,8 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
         .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 30px; }
         .right-header { text-align: right; font-weight: 900; line-height: 1.6; font-size: 13pt; }
         .left-header { text-align: left; font-weight: 700; line-height: 1.6; font-size: 12pt; }
-        .title { text-align: center; font-size: 18pt; font-weight: 900; margin: 30px 0; text-decoration: underline; }
+        .title { text-align: center; font-size: 18pt; font-weight: 900; margin: 20px 0 10px 0; text-decoration: underline; }
+        .subtitle { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 30px; color: #475569; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 12pt; }
         th, td { border: 1px solid #000; padding: 10px 8px; text-align: center; }
         th { background-color: #f1f5f9; font-weight: 900; font-size: 13pt; }
@@ -90,8 +91,8 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
        <div class="header">
           <div class="right-header">
             سلطنة عُمان<br>
-            وزارة التعليم<br>
-            المديرية العامة للتعليم بمحافظة شمال الباطنة<br>
+            وزارة التربية والتعليم<br>
+            المديرية العامة للتربية والتعليم بمحافظة شمال الباطنة<br>
           </div>
           <div class="left-header">
             المدرسة: ${schoolName || '____________________'}<br>
@@ -101,6 +102,7 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
        </div>
        
        <div class="title">${title}</div>
+       ${periodTitle ? `<div class="subtitle">(${periodTitle})</div>` : ''}
        
        <table>
          <thead>
@@ -117,7 +119,7 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
        </div>
 
        <div class="footer-note">
-          تم استخراج هذا التقرير إلكترونياً من نظام راصد - برمجة وتطوير: محمد الزعابي
+         تم استخراج هذا التقرير إلكترونياً من نظام راصد - برمجة وتطوير: محمد الزعابي
        </div>
 
        <script>
@@ -136,7 +138,6 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  // 💉 استرجاع الكود المحفوظ تلقائياً
   const [schoolCode, setSchoolCode] = useState(() => localStorage.getItem('rased_admin_code') || '');
   const [schoolName, setSchoolName] = useState(() => localStorage.getItem('rased_school_name') || '');
 
@@ -161,7 +162,6 @@ export default function App() {
       if (result.status === "success") {
         setDashboardData(result.data);
         setIsLoggedIn(true);
-        // 💉 حفظ كود المدرسة بنجاح في الذاكرة لتسهيل الدخول القادم
         localStorage.setItem('rased_admin_code', schoolCode);
       } else {
         setErrorMsg('حدث خطأ من السيرفر: ' + result.message);
@@ -176,7 +176,6 @@ export default function App() {
 
   const handleLogout = () => {
     setIsLoggedIn(false);
-    // 💉 عند الخروج لا نمسح الكود ليبقى جاهزاً، فقط نمسح الجلسة
     setActiveSection('dashboard');
     setDashboardData({ teachers: [], logs: [] });
   };
@@ -211,15 +210,25 @@ export default function App() {
 }
 
 // =========================================================
-// 1️⃣ اللوحة الرئيسية
+// 1️⃣ اللوحة الرئيسية (تمت إضافة فرز الحصص)
 // =========================================================
 function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) {
   const [activeTab, setActiveTab] = useState<'absent' | 'late' | 'truant'>('absent');
+  // 🚀 حالة جديدة لتحديد الحصة المطلوبة
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('الحصة الأولى');
+  
   const todayDate = new Date();
   const todayArabicName = getArabicDayName(todayDate);
 
   const expectedTeachersToday = useMemo(() => data.teachers.filter((t: any) => t.day === todayArabicName), [data.teachers, todayArabicName]);
-  const todayLogs = useMemo(() => data.logs.filter((log: any) => isSameDate(log.time, todayDate)), [data.logs, todayDate]);
+  
+  // 🚀 تصفية السجلات حسب اليوم والحصة المختارة
+  const todayLogs = useMemo(() => {
+    return data.logs.filter((log: any) => 
+      isSameDate(log.time, todayDate) && 
+      (selectedPeriod === 'all' || log.period === selectedPeriod || (!log.period && selectedPeriod === 'all'))
+    );
+  }, [data.logs, todayDate, selectedPeriod]);
 
   const uniqueTodayLogs = useMemo(() => {
     const map = new Map();
@@ -240,11 +249,12 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
     const chronologicalLogs = [...todayLogs].reverse();
 
     chronologicalLogs.forEach((log: any) => {
-      if (log[key] && log[key] !== "لا يوجد" && log[key] !== "حضور كامل") {
+      // 🚀 ذكاء التصفية: نتجاهل كلمة "الكل حاضر" ولا نضعها في قائمة المخالفات
+      if (log[key] && log[key] !== "لا يوجد" && log[key] !== "حضور كامل" && !log[key].includes("الكل حاضر")) {
         log[key].split("، ").forEach((name: string) => {
           const studentName = name.trim();
           if(studentName) {
-            const uniqueKey = `${studentName}-${log.teacherName}`;
+            const uniqueKey = `${studentName}-${log.teacherName}-${log.period || ''}`;
             if (!seen.has(uniqueKey)) {
               seen.add(uniqueKey);
               list.push({ 
@@ -252,6 +262,7 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
                 type: label,
                 teacher: log.teacherName, 
                 className: log.className, 
+                period: log.period || '-', // 🚀 إضافة رقم الحصة
                 time: new Date(log.time).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'}) 
               });
             }
@@ -272,54 +283,67 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
   const handlePrintDaily = () => {
     const combinedData = [...allAbsent, ...allLate, ...allTruant];
     const dateStr = todayDate.toLocaleDateString('ar-OM');
-    generateOfficialReport('التقرير اليومي لرصد المخالفات', combinedData, schoolName, dateStr, 'students');
+    const periodTitle = selectedPeriod === 'all' ? 'جميع الحصص' : selectedPeriod;
+    generateOfficialReport('التقرير اليومي لرصد المخالفات', combinedData, schoolName, dateStr, 'students', periodTitle);
   };
 
-  // 💉 دالة طباعة تقرير المعلمين المتأخرين
   const handlePrintLateTeachers = () => {
     const dateStr = todayDate.toLocaleDateString('ar-OM');
-    generateOfficialReport('كشف المعلمين المتأخرين عن رصد غياب الحصة الأولى', lateTeachers, schoolName, dateStr, 'teachers');
+    const periodTitle = selectedPeriod === 'all' ? 'جميع الحصص' : selectedPeriod;
+    generateOfficialReport('كشف المعلمين المتأخرين عن الرصد', lateTeachers, schoolName, dateStr, 'teachers', periodTitle);
   };
 
   return (
     <div className="space-y-8 pb-10">
       <div className="bg-indigo-900 text-white p-4 rounded-2xl shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="font-black text-xl">إحصائيات اليوم المباشرة</h2>
-          <p className="text-indigo-200 text-sm">مخصصة لمعلمي الحصة الأولى ليوم ({todayArabicName})</p>
+          <h2 className="font-black text-xl flex items-center gap-2">إحصائيات اليوم المباشرة</h2>
+          <p className="text-indigo-200 text-sm mt-1">يوم ({todayArabicName})</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="bg-amber-400 text-indigo-950 font-black px-4 py-2 rounded-xl">
-            {expectedTeachersToday.length} معلم مستهدف
+          {/* 🚀 قائمة فرز الحصص الأنيقة */}
+          <div className="flex items-center gap-2 bg-indigo-800/80 px-3 py-2 rounded-xl border border-indigo-700">
+            <Filter size={16} className="text-indigo-300"/>
+            <select 
+              value={selectedPeriod} 
+              onChange={(e) => setSelectedPeriod(e.target.value)} 
+              className="bg-transparent text-white font-bold outline-none cursor-pointer text-sm"
+            >
+              <option value="الحصة الأولى" className="text-slate-800">الحصة الأولى</option>
+              <option value="الحصة الخامسة" className="text-slate-800">الحصة الخامسة</option>
+              <option value="all" className="text-slate-800">كل الحصص</option>
+            </select>
           </div>
-          <button onClick={handlePrintDaily} className="flex items-center gap-2 bg-white text-indigo-900 px-4 py-2 rounded-xl font-bold hover:bg-slate-100 transition shadow-sm active:scale-95">
-            <Printer size={18} /> طباعة التقرير الرسمي
+          <div className="hidden sm:block w-px h-6 bg-indigo-700/50"></div>
+          <div className="bg-amber-400 text-indigo-950 font-black px-4 py-2 rounded-xl text-sm">
+            {expectedTeachersToday.length} مستهدف
+          </div>
+          <button onClick={handlePrintDaily} className="flex items-center gap-2 bg-white text-indigo-900 px-4 py-2 rounded-xl font-bold hover:bg-slate-100 transition shadow-sm active:scale-95 text-sm">
+            <Printer size={18} /> طباعة
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-right">
-        <StatCard title="نسبة إنجاز الرصد" value={`${completionRate}%`} icon={TrendingUp} color="indigo" />
-        <StatCard title="إجمالي المخالفات اليوم" value={allAbsent.length + allLate.length + allTruant.length} subtitle="حالة" icon={Users} color="amber" />
-        <StatCard title="معلمون متأخرون" value={lateTeachers.length} subtitle="معلم" icon={Clock} color="rose" />
+        <StatCard title="نسبة الإنجاز" value={`${completionRate}%`} icon={TrendingUp} color="indigo" />
+        <StatCard title="إجمالي المخالفات" value={allAbsent.length + allLate.length + allTruant.length} subtitle="حالة" icon={Users} color="amber" />
+        <StatCard title="تأخر في الرصد" value={lateTeachers.length} subtitle="معلم" icon={Clock} color="rose" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+        {/* المتقاعسين */}
         <div className="xl:col-span-4 flex flex-col gap-4">
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-3">
               <AlertTriangle className="text-rose-500" size={24} />
-              <h2 className="text-xl font-black text-slate-800">تأخر رصد اليوم</h2>
+              <h2 className="text-xl font-black text-slate-800">تأخر الرصد <span className="text-sm font-normal text-slate-500">({selectedPeriod === 'all' ? 'الكل' : selectedPeriod})</span></h2>
             </div>
-            
-            {/* 💉 زر طباعة تقرير المعلمين بجانب العنوان */}
             {lateTeachers.length > 0 && (
               <button 
                 onClick={handlePrintLateTeachers}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
-                title="طباعة كشف المتقاعسين"
               >
-                <Printer size={14} /> طباعة الكشف
+                <Printer size={14} /> الكشف
               </button>
             )}
           </div>
@@ -342,11 +366,12 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
           </div>
         </div>
 
+        {/* المخالفات */}
         <div className="xl:col-span-8 flex flex-col gap-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between px-2 gap-3">
             <div className="flex items-center gap-3">
               <ListOrdered className="text-amber-500" size={24} />
-              <h2 className="text-xl font-black text-slate-800">مخالفات الطلاب (اليوم)</h2>
+              <h2 className="text-xl font-black text-slate-800">مخالفات الطلاب</h2>
             </div>
             <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-200">
               <button onClick={() => setActiveTab('absent')} className={`px-4 py-1.5 rounded-lg font-bold text-sm transition ${activeTab === 'absent' ? 'bg-rose-100 text-rose-700' : 'text-slate-500 hover:bg-slate-50'}`}>🔴 غياب ({allAbsent.length})</button>
@@ -357,13 +382,14 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
           
           <div className="bg-white/70 backdrop-blur-2xl rounded-[2rem] border border-white p-6 shadow-md overflow-hidden max-h-[500px] overflow-y-auto custom-scrollbar">
             {activeListData.length === 0 ? (
-              <div className="py-10 text-center text-slate-500 font-bold">لا يوجد حالات مسجلة.</div>
+              <div className="py-10 text-center text-slate-500 font-bold">لا يوجد حالات مسجلة في هذه القائمة.</div>
             ) : (
               <table className="w-full text-right text-sm">
                 <thead>
                   <tr className="bg-slate-100 text-slate-600">
                     <th className="p-3 rounded-r-xl">الطالب</th>
                     <th className="p-3">المعلم</th>
+                    <th className="p-3">الحصة</th>
                     <th className="p-3">الفصل</th>
                     <th className="p-3 rounded-l-xl">الوقت</th>
                   </tr>
@@ -373,6 +399,7 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="p-3 font-black text-indigo-900">{item.name}</td>
                       <td className="p-3 font-bold text-slate-600">{item.teacher}</td>
+                      <td className="p-3 text-slate-500 font-bold text-xs">{item.period}</td>
                       <td className="p-3"><span className="bg-indigo-50 text-indigo-600 px-2 py-1 rounded text-xs font-bold">{item.className}</span></td>
                       <td className="p-3 text-slate-400 font-mono">{item.time}</td>
                     </tr>
@@ -388,61 +415,77 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
 }
 
 // =========================================================
-// 2️⃣ صفحة أرشيف التقارير
+// 2️⃣ صفحة أرشيف التقارير (تمت إضافة الفرز والوسام الأخضر)
 // =========================================================
 function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
   const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   
   const reportData = useMemo(() => {
     const targetDate = new Date(selectedDateStr);
     const targetArabicDay = getArabicDayName(targetDate);
     const expected = data.teachers.filter((t: any) => t.day === targetArabicDay);
-    const logsForDate = data.logs.filter((log: any) => isSameDate(log.time, targetDate));
+    
+    // 🚀 جلب سجلات اليوم والحصة
+    const logsForDate = data.logs.filter((log: any) => 
+      isSameDate(log.time, targetDate) &&
+      (selectedPeriod === 'all' || log.period === selectedPeriod || (!log.period && selectedPeriod === 'all'))
+    );
 
     const uniqueLogsForDate = new Map();
     const chronologicalLogs = [...logsForDate].reverse();
 
     chronologicalLogs.forEach((log: any) => {
-      if (!uniqueLogsForDate.has(log.teacherName)) {
-        uniqueLogsForDate.set(log.teacherName, { ...log });
-      } else {
-        const existing = uniqueLogsForDate.get(log.teacherName);
-        const mergeStrings = (s1: string, s2: string) => {
-             const arr1 = s1 && s1 !== "لا يوجد" && s1 !== "حضور كامل" ? s1.split("، ") : [];
-             const arr2 = s2 && s2 !== "لا يوجد" && s2 !== "حضور كامل" ? s2.split("، ") : [];
-             const combined = Array.from(new Set([...arr1, ...arr2]));
-             return combined.length > 0 ? combined.join("، ") : "لا يوجد";
-        };
-        existing.absentStudents = mergeStrings(existing.absentStudents, log.absentStudents);
-        existing.lateStudents = mergeStrings(existing.lateStudents, log.lateStudents);
-        existing.truantStudents = mergeStrings(existing.truantStudents, log.truantStudents);
-        existing.time = log.time;
+      // 🚀 دمج الحصص إذا اختار المدير "كل الحصص" والمعلم رصد أكثر من حصة
+      const key = selectedPeriod === 'all' ? `${log.teacherName}-${log.period}` : log.teacherName;
+      if (!uniqueLogsForDate.has(key)) {
+        uniqueLogsForDate.set(key, { ...log });
       }
     });
 
-    return expected.map((teacher: any) => {
-      const teacherLog = uniqueLogsForDate.get(teacher.name);
-      return {
-        name: teacher.name,
-        className: teacher.className,
-        status: teacherLog ? 'مكتمل' : 'متأخر',
-        absents: teacherLog?.absentStudents || 'لا يوجد',
-        lates: teacherLog?.lateStudents || 'لا يوجد',
-        truants: teacherLog?.truantStudents || 'لا يوجد',
-        time: teacherLog ? new Date(teacherLog.time).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'}) : '-'
-      };
+    // تحويل الـ Map إلى قائمة وعرضها
+    const results: any[] = [];
+    
+    expected.forEach((teacher: any) => {
+        if(selectedPeriod !== 'all') {
+             const teacherLog = uniqueLogsForDate.get(teacher.name);
+             results.push({
+                name: teacher.name,
+                className: teacher.className,
+                period: selectedPeriod,
+                status: teacherLog ? 'مكتمل' : 'متأخر',
+                absents: teacherLog?.absentStudents || 'لا يوجد',
+                lates: teacherLog?.lateStudents || 'لا يوجد',
+                truants: teacherLog?.truantStudents || 'لا يوجد',
+                time: teacherLog ? new Date(teacherLog.time).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'}) : '-'
+             });
+        } else {
+             // 🚀 إذا اختار "كل الحصص" سنظهر المعلم لكل حصة رفعها
+             const logsForThisTeacher = Array.from(uniqueLogsForDate.values()).filter(l => l.teacherName === teacher.name);
+             if(logsForThisTeacher.length === 0) {
+                 results.push({
+                    name: teacher.name, className: teacher.className, period: '-', status: 'متأخر', absents: 'لا يوجد', lates: 'لا يوجد', truants: 'لا يوجد', time: '-'
+                 });
+             } else {
+                 logsForThisTeacher.forEach(log => {
+                     results.push({
+                        name: teacher.name, className: teacher.className, period: log.period || '-', status: 'مكتمل', absents: log.absentStudents, lates: log.lateStudents, truants: log.truantStudents, time: new Date(log.time).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'})
+                     });
+                 });
+             }
+        }
     });
-  }, [data, selectedDateStr]);
+    return results;
+  }, [data, selectedDateStr, selectedPeriod]);
 
-  // 💉 زر الطباعة للأرشيف
   const handlePrintArchive = () => {
     let combinedData: any[] = [];
     reportData.forEach((row: any) => {
       if (row.status === 'مكتمل') {
         const extract = (str: string, type: string) => {
-          if (str !== 'لا يوجد' && str !== 'حضور كامل') {
+          if (str && str !== 'لا يوجد' && str !== 'حضور كامل' && !str.includes('الكل حاضر')) {
             str.split('، ').forEach(name => {
-              if(name.trim()) combinedData.push({ name: name.trim(), type: type, teacher: row.name, className: row.className, time: row.time });
+              if(name.trim()) combinedData.push({ name: name.trim(), type: type, teacher: row.name, className: row.className, period: row.period, time: row.time });
             });
           }
         };
@@ -453,7 +496,8 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
     });
     
     const dateStr = new Date(selectedDateStr).toLocaleDateString('ar-OM');
-    generateOfficialReport('التقرير الأرشيفي الشامل لغياب ومخالفات الطلاب', combinedData, schoolName, dateStr, 'students');
+    const periodTitle = selectedPeriod === 'all' ? 'جميع الحصص' : selectedPeriod;
+    generateOfficialReport('التقرير الأرشيفي الشامل', combinedData, schoolName, dateStr, 'students', periodTitle);
   };
 
   return (
@@ -464,22 +508,34 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
           <h2 className="text-2xl font-black text-slate-800">أرشيف التقارير</h2>
         </div>
         <div className="flex items-center gap-3">
+          
+          {/* 🚀 قائمة الفرز في الأرشيف */}
+          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl shadow-sm border border-slate-200">
+            <Filter size={18} className="text-indigo-400" />
+            <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="bg-transparent font-bold text-slate-700 outline-none text-sm">
+              <option value="all">كل الحصص</option>
+              <option value="الحصة الأولى">الحصة الأولى</option>
+              <option value="الحصة الخامسة">الحصة الخامسة</option>
+            </select>
+          </div>
+
           <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200">
             <CalendarIcon size={20} className="text-indigo-500" />
             <input type="date" value={selectedDateStr} onChange={(e) => setSelectedDateStr(e.target.value)} className="bg-transparent font-bold text-slate-700 outline-none" />
           </div>
           <button onClick={handlePrintArchive} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 transition shadow-sm active:scale-95">
-            <Printer size={18} /> استخراج PDF رسمي
+            <Printer size={18} /> استخراج PDF
           </button>
         </div>
       </div>
 
       <div className="bg-white/70 backdrop-blur-2xl rounded-[2rem] p-6 border border-white shadow-lg flex-1 overflow-hidden flex flex-col">
         <div className="overflow-x-auto flex-1 custom-scrollbar">
-          <table className="w-full text-right border-collapse min-w-[800px]">
+          <table className="w-full text-right border-collapse min-w-[900px]">
             <thead className="bg-slate-100/80 border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="p-4 font-black text-slate-600">المعلم</th>
+                <th className="p-4 font-black text-slate-600 text-center">الحصة</th>
                 <th className="p-4 font-black text-slate-600">الفصل</th>
                 <th className="p-4 font-black text-slate-600 text-center">الرصد</th>
                 <th className="p-4 font-black text-slate-600">تفاصيل المخالفات</th>
@@ -488,11 +544,12 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {reportData.length === 0 ? (
-                <tr><td colSpan={5} className="py-10 text-center font-bold text-slate-400">لا يوجد معلمين مسندين لهذا اليوم.</td></tr>
+                <tr><td colSpan={6} className="py-10 text-center font-bold text-slate-400">لا يوجد معلمين مسندين لهذا اليوم.</td></tr>
               ) : (
                 reportData.map((row: any, idx: number) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4 font-black text-indigo-900">{row.name}</td>
+                    <td className="p-4 font-bold text-slate-500 text-center text-xs">{row.period}</td>
                     <td className="p-4 font-bold text-slate-600">{row.className}</td>
                     <td className="p-4 text-center">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold ${row.status === 'مكتمل' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
@@ -501,10 +558,21 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
                     </td>
                     <td className="p-4 text-sm font-bold text-slate-600">
                       <div className="flex flex-col gap-1 items-start">
-                        {row.absents !== 'لا يوجد' && row.absents !== 'حضور كامل' && <span className="bg-rose-50 text-rose-700 px-2 py-1 rounded-md text-xs border border-rose-100 w-fit">🔴 غياب: {row.absents}</span>}
-                        {row.lates !== 'لا يوجد' && <span className="bg-amber-50 text-amber-700 px-2 py-1 rounded-md text-xs border border-amber-100 w-fit">🟠 تأخير: {row.lates}</span>}
-                        {row.truants !== 'لا يوجد' && <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md text-xs border border-purple-100 w-fit">🟣 تسرب: {row.truants}</span>}
-                        {((row.absents === 'لا يوجد' || row.absents === 'حضور كامل') && row.lates === 'لا يوجد' && row.truants === 'لا يوجد' && row.status === 'مكتمل') && <span className="text-emerald-500 font-bold bg-emerald-50 px-2 py-1 rounded-md text-xs">✔️ لا توجد مخالفات</span>}
+                        {/* 🚀 الوسام الأخضر السحري (الكل حاضر) */}
+                        {row.absents?.includes('الكل حاضر') && (
+                            <span className="bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg text-xs font-black border border-emerald-200 shadow-sm w-fit flex items-center gap-1">
+                                <CheckCircle2 size={14}/> تم الرصد (لا يوجد غياب)
+                            </span>
+                        )}
+                        {/* إخفاء المخالفات إذا كان الكل حاضر */}
+                        {!row.absents?.includes('الكل حاضر') && (
+                          <>
+                            {row.absents !== 'لا يوجد' && row.absents !== 'حضور كامل' && <span className="bg-rose-50 text-rose-700 px-2 py-1 rounded-md text-xs border border-rose-100 w-fit">🔴 غياب: {row.absents}</span>}
+                            {row.lates !== 'لا يوجد' && <span className="bg-amber-50 text-amber-700 px-2 py-1 rounded-md text-xs border border-amber-100 w-fit">🟠 تأخير: {row.lates}</span>}
+                            {row.truants !== 'لا يوجد' && <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md text-xs border border-purple-100 w-fit">🟣 تسرب: {row.truants}</span>}
+                            {((row.absents === 'لا يوجد' || row.absents === 'حضور كامل') && row.lates === 'لا يوجد' && row.truants === 'لا يوجد' && row.status === 'مكتمل') && <span className="text-emerald-500 font-bold bg-emerald-50 px-2 py-1 rounded-md text-xs">✔️ سجل نظيف</span>}
+                          </>
+                        )}
                       </div>
                     </td>
                     <td className="p-4 text-slate-500 text-sm font-mono">{row.time}</td>
@@ -530,10 +598,11 @@ function SearchPage({ data }: { data: any }) {
 
     data.logs.forEach((log: any) => {
       const check = (listStr: string, label: string, color: string) => {
-        if (listStr && listStr !== 'لا يوجد' && listStr !== 'حضور كامل') {
+        // 🚀 تجاهل "الكل حاضر" في البحث
+        if (listStr && listStr !== 'لا يوجد' && listStr !== 'حضور كامل' && !listStr.includes("الكل حاضر")) {
           listStr.split('، ').forEach(name => {
             if (name.includes(term)) {
-              found.push({ name, label, color, teacher: log.teacherName, className: log.className, time: new Date(log.time).toLocaleTimeString('ar-OM', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit' }) });
+              found.push({ name, label, color, teacher: log.teacherName, className: log.className, period: log.period || '-', time: new Date(log.time).toLocaleTimeString('ar-OM', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit' }) });
             }
           });
         }
@@ -569,12 +638,13 @@ function SearchPage({ data }: { data: any }) {
               <p className="font-bold text-emerald-600/80">لم يتم رصد أي غياب أو تأخير أو تسرب بهذا الاسم.</p>
             </div>
           ) : (
-            <table className="w-full text-right border-collapse min-w-[800px]">
+            <table className="w-full text-right border-collapse min-w-[900px]">
               <thead className="bg-slate-100/80 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="p-4 font-black text-slate-600 rounded-tr-xl">اسم الطالب</th>
                   <th className="p-4 font-black text-slate-600">نوع المخالفة</th>
-                  <th className="p-4 font-black text-slate-600">المعلم / الحصة</th>
+                  <th className="p-4 font-black text-slate-600">المعلم</th>
+                  <th className="p-4 font-black text-slate-600">الحصة</th>
                   <th className="p-4 font-black text-slate-600">الفصل</th>
                   <th className="p-4 font-black text-slate-600 rounded-tl-xl">التاريخ والوقت</th>
                 </tr>
@@ -585,6 +655,7 @@ function SearchPage({ data }: { data: any }) {
                     <td className="p-4 font-black text-indigo-900">{row.name}</td>
                     <td className="p-4"><span className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${row.color}`}>{row.label}</span></td>
                     <td className="p-4 font-bold text-slate-600">{row.teacher}</td>
+                    <td className="p-4 text-slate-500 text-xs font-bold">{row.period}</td>
                     <td className="p-4"><span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-md text-xs font-bold">{row.className}</span></td>
                     <td className="p-4 text-slate-500 font-mono text-sm">{row.time}</td>
                   </tr>
