@@ -40,11 +40,11 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
 
   let tableHeader = type === 'students' 
     ? `<tr><th style="width: 5%;">م</th><th style="width: 25%;">اسم الطالب</th><th style="width: 15%;">المخالفة</th><th style="width: 10%;">الفصل</th><th style="width: 20%;">المعلم الراصد</th><th style="width: 10%;">الحصة</th><th style="width: 15%;">الوقت</th></tr>`
-    : `<tr><th style="width: 10%;">م</th><th style="width: 45%;">اسم المعلم </th><th style="width: 25%;">الفصل المسند</th><th style="width: 20%;">حالة الرصد</th></tr>`;
+    : `<tr><th style="width: 10%;">م</th><th style="width: 35%;">اسم المعلم </th><th style="width: 20%;">الفصل المسند</th><th style="width: 15%;">الحصة</th><th style="width: 20%;">حالة الرصد</th></tr>`;
 
   let tableContent = '';
   if (dataList.length === 0) {
-      tableContent = `<tr><td colspan="${type === 'students' ? 7 : 4}" style="text-align:center; padding: 20px; font-weight: bold;">لا يوجد سجلات في هذا التقرير.</td></tr>`;
+      tableContent = `<tr><td colspan="${type === 'students' ? 7 : 5}" style="text-align:center; padding: 20px; font-weight: bold;">لا يوجد سجلات في هذا التقرير.</td></tr>`;
   } else {
       dataList.forEach((item, index) => {
           tableContent += type === 'students' 
@@ -61,6 +61,7 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
                  <td>${index + 1}</td>
                  <td style="font-weight: bold; text-align: right; padding-right: 20px;">${item.name}</td>
                  <td>${item.className}</td>
+                 <td>${item.period || '-'}</td>
                  <td style="color: red; font-weight: bold;">لم يتم الرصد</td>
                </tr>`;
       });
@@ -83,8 +84,6 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
         th, td { border: 1px solid #000; padding: 10px 8px; text-align: center; }
         th { background-color: #f1f5f9; font-weight: 900; font-size: 13pt; }
         .signatures { display: flex; justify-content: space-between; margin-top: 70px; font-weight: 900; font-size: 14pt; padding: 0 20px; }
-        .watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 130px; font-weight: 900; color: rgba(0,0,0,0.03); z-index: -1; white-space: nowrap; pointer-events: none;}
-        .footer-note { text-align: center; font-size: 9pt; font-weight: bold; color: #64748b; margin-top: 50px; border-top: 1px solid #cbd5e1; padding-top: 10px; }
       </style>
     </head>
     <body>
@@ -117,15 +116,8 @@ const generateOfficialReport = (title: string, dataList: any[], schoolName: stri
          ${type === 'students' ? '<div>مُعد التقرير: ........................</div>' : '<div>الختم الرسمي:</div>'}
          <div>يعتمد، مدير المدرسة: ........................</div>
        </div>
-
-       <div class="footer-note">
-         تم استخراج هذا التقرير إلكترونياً من نظام راصد - برمجة وتطوير: محمد الزعابي
-       </div>
-
        <script>
-         window.onload = function() {
-           setTimeout(function() { window.print(); }, 500);
-         };
+         window.onload = function() { setTimeout(function() { window.print(); }, 500); };
        </script>
     </body>
     </html>
@@ -141,9 +133,7 @@ export default function App() {
   const [schoolCode, setSchoolCode] = useState(() => localStorage.getItem('rased_admin_code') || '');
   const [schoolName, setSchoolName] = useState(() => localStorage.getItem('rased_school_name') || '');
 
-  useEffect(() => {
-    localStorage.setItem('rased_school_name', schoolName);
-  }, [schoolName]);
+  useEffect(() => { localStorage.setItem('rased_school_name', schoolName); }, [schoolName]);
 
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
   const [isLoading, setIsLoading] = useState(false);
@@ -163,15 +153,9 @@ export default function App() {
         setDashboardData(result.data);
         setIsLoggedIn(true);
         localStorage.setItem('rased_admin_code', schoolCode);
-      } else {
-        setErrorMsg('حدث خطأ من السيرفر: ' + result.message);
-      }
-    } catch (error) {
-      console.error("تفاصيل الخطأ:", error); 
-      setErrorMsg('تأكد من اتصالك بالإنترنت ومن صحة الرابط');
-    } finally {
-      setIsLoading(false);
-    }
+      } else setErrorMsg('حدث خطأ من السيرفر: ' + result.message);
+    } catch (error) { setErrorMsg('تأكد من اتصالك بالإنترنت ومن صحة الرابط'); } 
+    finally { setIsLoading(false); }
   };
 
   const handleLogout = () => {
@@ -188,12 +172,9 @@ export default function App() {
         <div className="absolute top-[-10%] right-[-5%] w-[40vw] h-[40vw] rounded-full bg-indigo-100/50 blur-[100px]" />
         <div className="absolute bottom-[-10%] left-[-5%] w-[30vw] h-[30vw] rounded-full bg-amber-100/40 blur-[80px]" />
       </div>
-
       <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
-
       <div className="flex-1 flex flex-col h-full relative z-10 overflow-hidden">
         <TopHeader onLogout={handleLogout} schoolCode={schoolCode} schoolName={schoolName} />
-        
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
           <AnimatePresence mode="wait">
             <motion.div key={activeSection} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3 }} className="max-w-7xl mx-auto h-full">
@@ -210,19 +191,22 @@ export default function App() {
 }
 
 // =========================================================
-// 1️⃣ اللوحة الرئيسية (تمت إضافة فرز الحصص)
+// 1️⃣ اللوحة الرئيسية
 // =========================================================
 function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) {
   const [activeTab, setActiveTab] = useState<'absent' | 'late' | 'truant'>('absent');
-  // 🚀 حالة جديدة لتحديد الحصة المطلوبة
   const [selectedPeriod, setSelectedPeriod] = useState<string>('الحصة الأولى');
-  
   const todayDate = new Date();
   const todayArabicName = getArabicDayName(todayDate);
 
-  const expectedTeachersToday = useMemo(() => data.teachers.filter((t: any) => t.day === todayArabicName), [data.teachers, todayArabicName]);
+  // 🚀 فلترة المعلمين المستهدفين بناءً على (اليوم) و (الحصة)
+  const expectedTeachersToday = useMemo(() => {
+    return data.teachers.filter((t: any) => 
+      t.day === todayArabicName && 
+      (selectedPeriod === 'all' || t.period === selectedPeriod || t.period === 'الكل' || !t.period)
+    );
+  }, [data.teachers, todayArabicName, selectedPeriod]);
   
-  // 🚀 تصفية السجلات حسب اليوم والحصة المختارة
   const todayLogs = useMemo(() => {
     return data.logs.filter((log: any) => 
       isSameDate(log.time, todayDate) && 
@@ -233,15 +217,21 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
   const uniqueTodayLogs = useMemo(() => {
     const map = new Map();
     todayLogs.forEach((log: any) => {
-      if (!map.has(log.teacherName)) map.set(log.teacherName, log);
+      const key = `${log.teacherName}-${log.period}`;
+      if (!map.has(key)) map.set(key, log);
     });
     return Array.from(map.values());
   }, [todayLogs]);
 
+  // 🚀 المعلمون المتأخرون الآن يُحسبون بدقة لكل حصة
   const lateTeachers = useMemo(() => {
-    const loggedTeacherNames = new Set(uniqueTodayLogs.map((l: any) => l.teacherName));
-    return expectedTeachersToday.filter((t: any) => !loggedTeacherNames.has(t.name));
-  }, [expectedTeachersToday, uniqueTodayLogs]);
+    const loggedKeys = new Set(uniqueTodayLogs.map((l: any) => `${l.teacherName}-${l.period}`));
+    return expectedTeachersToday.filter((t: any) => {
+      // إذا كان الفرز على "الكل"، يجب أن يكون المعلم قد سجل لكل حصة مطلوبة منه
+      const periodToCheck = selectedPeriod === 'all' ? (t.period || 'غير محدد') : selectedPeriod;
+      return !loggedKeys.has(`${t.name}-${periodToCheck}`);
+    });
+  }, [expectedTeachersToday, uniqueTodayLogs, selectedPeriod]);
 
   const extractList = (key: string, label: string) => {
     let list: any[] = [];
@@ -249,7 +239,6 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
     const chronologicalLogs = [...todayLogs].reverse();
 
     chronologicalLogs.forEach((log: any) => {
-      // 🚀 ذكاء التصفية: نتجاهل كلمة "الكل حاضر" ولا نضعها في قائمة المخالفات
       if (log[key] && log[key] !== "لا يوجد" && log[key] !== "حضور كامل" && !log[key].includes("الكل حاضر")) {
         log[key].split("، ").forEach((name: string) => {
           const studentName = name.trim();
@@ -258,11 +247,8 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
             if (!seen.has(uniqueKey)) {
               seen.add(uniqueKey);
               list.push({ 
-                name: studentName, 
-                type: label,
-                teacher: log.teacherName, 
-                className: log.className, 
-                period: log.period || '-', // 🚀 إضافة رقم الحصة
+                name: studentName, type: label, teacher: log.teacherName, 
+                className: log.className, period: log.period || '-', 
                 time: new Date(log.time).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'}) 
               });
             }
@@ -301,31 +287,22 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
           <p className="text-indigo-200 text-sm mt-1">يوم ({todayArabicName})</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* 🚀 قائمة فرز الحصص الأنيقة */}
           <div className="flex items-center gap-2 bg-indigo-800/80 px-3 py-2 rounded-xl border border-indigo-700">
             <Filter size={16} className="text-indigo-300"/>
-            <select 
-              value={selectedPeriod} 
-              onChange={(e) => setSelectedPeriod(e.target.value)} 
-              className="bg-transparent text-white font-bold outline-none cursor-pointer text-sm"
-            >
+            <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="bg-transparent text-white font-bold outline-none cursor-pointer text-sm">
               <option value="الحصة الأولى" className="text-slate-800">الحصة الأولى</option>
               <option value="الحصة الخامسة" className="text-slate-800">الحصة الخامسة</option>
               <option value="all" className="text-slate-800">كل الحصص</option>
             </select>
           </div>
           <div className="hidden sm:block w-px h-6 bg-indigo-700/50"></div>
-          <div className="bg-amber-400 text-indigo-950 font-black px-4 py-2 rounded-xl text-sm">
-            {expectedTeachersToday.length} مستهدف
-          </div>
-          <button onClick={handlePrintDaily} className="flex items-center gap-2 bg-white text-indigo-900 px-4 py-2 rounded-xl font-bold hover:bg-slate-100 transition shadow-sm active:scale-95 text-sm">
-            <Printer size={18} /> طباعة
-          </button>
+          <div className="bg-amber-400 text-indigo-950 font-black px-4 py-2 rounded-xl text-sm">{expectedTeachersToday.length} مستهدف</div>
+          <button onClick={handlePrintDaily} className="flex items-center gap-2 bg-white text-indigo-900 px-4 py-2 rounded-xl font-bold hover:bg-slate-100 transition shadow-sm active:scale-95 text-sm"><Printer size={18} /> طباعة</button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-right">
-        <StatCard title="نسبة الإنجاز" value={`${completionRate}%`} icon={TrendingUp} color="indigo" />
+        <StatCard title="نسبة الإنجاز" value={`${completionRate > 100 ? 100 : completionRate}%`} icon={TrendingUp} color="indigo" />
         <StatCard title="إجمالي المخالفات" value={allAbsent.length + allLate.length + allTruant.length} subtitle="حالة" icon={Users} color="amber" />
         <StatCard title="تأخر في الرصد" value={lateTeachers.length} subtitle="معلم" icon={Clock} color="rose" />
       </div>
@@ -336,15 +313,10 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-3">
               <AlertTriangle className="text-rose-500" size={24} />
-              <h2 className="text-xl font-black text-slate-800">تأخر الرصد <span className="text-sm font-normal text-slate-500">({selectedPeriod === 'all' ? 'الكل' : selectedPeriod})</span></h2>
+              <h2 className="text-xl font-black text-slate-800">تأخر الرصد</h2>
             </div>
             {lateTeachers.length > 0 && (
-              <button 
-                onClick={handlePrintLateTeachers}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
-              >
-                <Printer size={14} /> الكشف
-              </button>
+              <button onClick={handlePrintLateTeachers} className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"><Printer size={14} /> الكشف</button>
             )}
           </div>
           <div className="bg-white/60 backdrop-blur-2xl rounded-[2rem] p-6 border border-white/80 shadow-md flex-1 overflow-y-auto max-h-[500px] custom-scrollbar">
@@ -357,7 +329,7 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
                     <div className="w-10 h-10 rounded-xl bg-rose-200 text-rose-600 flex items-center justify-center"><Clock size={18} /></div>
                     <div>
                       <h3 className="font-bold text-slate-800 text-sm">{teacher.name}</h3>
-                      <p className="text-xs text-rose-600 font-bold">{teacher.className}</p>
+                      <p className="text-xs text-rose-600 font-bold">{teacher.className} - {teacher.period || selectedPeriod}</p>
                     </div>
                   </div>
                 ))}
@@ -415,7 +387,7 @@ function DashboardHome({ data, schoolName }: { data: any, schoolName: string }) 
 }
 
 // =========================================================
-// 2️⃣ صفحة أرشيف التقارير (تمت إضافة الفرز والوسام الأخضر)
+// 2️⃣ صفحة أرشيف التقارير
 // =========================================================
 function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
   const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
@@ -424,9 +396,12 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
   const reportData = useMemo(() => {
     const targetDate = new Date(selectedDateStr);
     const targetArabicDay = getArabicDayName(targetDate);
-    const expected = data.teachers.filter((t: any) => t.day === targetArabicDay);
     
-    // 🚀 جلب سجلات اليوم والحصة
+    const expected = data.teachers.filter((t: any) => 
+      t.day === targetArabicDay &&
+      (selectedPeriod === 'all' || t.period === selectedPeriod || t.period === 'الكل' || !t.period)
+    );
+    
     const logsForDate = data.logs.filter((log: any) => 
       isSameDate(log.time, targetDate) &&
       (selectedPeriod === 'all' || log.period === selectedPeriod || (!log.period && selectedPeriod === 'all'))
@@ -436,44 +411,28 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
     const chronologicalLogs = [...logsForDate].reverse();
 
     chronologicalLogs.forEach((log: any) => {
-      // 🚀 دمج الحصص إذا اختار المدير "كل الحصص" والمعلم رصد أكثر من حصة
-      const key = selectedPeriod === 'all' ? `${log.teacherName}-${log.period}` : log.teacherName;
+      const key = `${log.teacherName}-${log.period}`;
       if (!uniqueLogsForDate.has(key)) {
         uniqueLogsForDate.set(key, { ...log });
       }
     });
 
-    // تحويل الـ Map إلى قائمة وعرضها
     const results: any[] = [];
-    
     expected.forEach((teacher: any) => {
-        if(selectedPeriod !== 'all') {
-             const teacherLog = uniqueLogsForDate.get(teacher.name);
-             results.push({
-                name: teacher.name,
-                className: teacher.className,
-                period: selectedPeriod,
-                status: teacherLog ? 'مكتمل' : 'متأخر',
-                absents: teacherLog?.absentStudents || 'لا يوجد',
-                lates: teacherLog?.lateStudents || 'لا يوجد',
-                truants: teacherLog?.truantStudents || 'لا يوجد',
-                time: teacherLog ? new Date(teacherLog.time).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'}) : '-'
-             });
-        } else {
-             // 🚀 إذا اختار "كل الحصص" سنظهر المعلم لكل حصة رفعها
-             const logsForThisTeacher = Array.from(uniqueLogsForDate.values()).filter(l => l.teacherName === teacher.name);
-             if(logsForThisTeacher.length === 0) {
-                 results.push({
-                    name: teacher.name, className: teacher.className, period: '-', status: 'متأخر', absents: 'لا يوجد', lates: 'لا يوجد', truants: 'لا يوجد', time: '-'
-                 });
-             } else {
-                 logsForThisTeacher.forEach(log => {
-                     results.push({
-                        name: teacher.name, className: teacher.className, period: log.period || '-', status: 'مكتمل', absents: log.absentStudents, lates: log.lateStudents, truants: log.truantStudents, time: new Date(log.time).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'})
-                     });
-                 });
-             }
-        }
+        const periodToCheck = selectedPeriod === 'all' ? (teacher.period || 'غير محدد') : selectedPeriod;
+        const key = `${teacher.name}-${periodToCheck}`;
+        const teacherLog = uniqueLogsForDate.get(key);
+        
+        results.push({
+            name: teacher.name,
+            className: teacher.className,
+            period: periodToCheck,
+            status: teacherLog ? 'مكتمل' : 'متأخر',
+            absents: teacherLog?.absentStudents || 'لا يوجد',
+            lates: teacherLog?.lateStudents || 'لا يوجد',
+            truants: teacherLog?.truantStudents || 'لا يوجد',
+            time: teacherLog ? new Date(teacherLog.time).toLocaleTimeString('ar-SA', {hour: '2-digit', minute:'2-digit'}) : '-'
+        });
     });
     return results;
   }, [data, selectedDateStr, selectedPeriod]);
@@ -494,7 +453,6 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
         extract(row.truants, 'تسرب');
       }
     });
-    
     const dateStr = new Date(selectedDateStr).toLocaleDateString('ar-OM');
     const periodTitle = selectedPeriod === 'all' ? 'جميع الحصص' : selectedPeriod;
     generateOfficialReport('التقرير الأرشيفي الشامل', combinedData, schoolName, dateStr, 'students', periodTitle);
@@ -508,8 +466,6 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
           <h2 className="text-2xl font-black text-slate-800">أرشيف التقارير</h2>
         </div>
         <div className="flex items-center gap-3">
-          
-          {/* 🚀 قائمة الفرز في الأرشيف */}
           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl shadow-sm border border-slate-200">
             <Filter size={18} className="text-indigo-400" />
             <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="bg-transparent font-bold text-slate-700 outline-none text-sm">
@@ -518,17 +474,13 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
               <option value="الحصة الخامسة">الحصة الخامسة</option>
             </select>
           </div>
-
           <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200">
             <CalendarIcon size={20} className="text-indigo-500" />
             <input type="date" value={selectedDateStr} onChange={(e) => setSelectedDateStr(e.target.value)} className="bg-transparent font-bold text-slate-700 outline-none" />
           </div>
-          <button onClick={handlePrintArchive} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 transition shadow-sm active:scale-95">
-            <Printer size={18} /> استخراج PDF
-          </button>
+          <button onClick={handlePrintArchive} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 transition shadow-sm active:scale-95"><Printer size={18} /> استخراج PDF</button>
         </div>
       </div>
-
       <div className="bg-white/70 backdrop-blur-2xl rounded-[2rem] p-6 border border-white shadow-lg flex-1 overflow-hidden flex flex-col">
         <div className="overflow-x-auto flex-1 custom-scrollbar">
           <table className="w-full text-right border-collapse min-w-[900px]">
@@ -558,13 +510,11 @@ function ReportsPage({ data, schoolName }: { data: any, schoolName: string }) {
                     </td>
                     <td className="p-4 text-sm font-bold text-slate-600">
                       <div className="flex flex-col gap-1 items-start">
-                        {/* 🚀 الوسام الأخضر السحري (الكل حاضر) */}
                         {row.absents?.includes('الكل حاضر') && (
                             <span className="bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg text-xs font-black border border-emerald-200 shadow-sm w-fit flex items-center gap-1">
                                 <CheckCircle2 size={14}/> تم الرصد (لا يوجد غياب)
                             </span>
                         )}
-                        {/* إخفاء المخالفات إذا كان الكل حاضر */}
                         {!row.absents?.includes('الكل حاضر') && (
                           <>
                             {row.absents !== 'لا يوجد' && row.absents !== 'حضور كامل' && <span className="bg-rose-50 text-rose-700 px-2 py-1 rounded-md text-xs border border-rose-100 w-fit">🔴 غياب: {row.absents}</span>}
@@ -595,10 +545,8 @@ function SearchPage({ data }: { data: any }) {
     if (!searchQuery.trim()) return [];
     const term = searchQuery.trim();
     let found: any[] = [];
-
     data.logs.forEach((log: any) => {
       const check = (listStr: string, label: string, color: string) => {
-        // 🚀 تجاهل "الكل حاضر" في البحث
         if (listStr && listStr !== 'لا يوجد' && listStr !== 'حضور كامل' && !listStr.includes("الكل حاضر")) {
           listStr.split('، ').forEach(name => {
             if (name.includes(term)) {
@@ -683,11 +631,15 @@ function SettingsPage({ schoolCode, schoolName, setSchoolName }: any) {
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+      
+      // 🚀 التحديث هنا: قراءة عمود "الحصة" من ملف الإكسل
       const teachersList = jsonData.map(row => ({
         name: row['اسم المعلم'] || row['الاسم'] || row['المعلم'] || '',
         className: row['الفصل'] || row['الفصل المسند'] || row['الصفوف'] || '',
-        day: row['اليوم'] || ''
+        day: row['اليوم'] || '',
+        period: row['الحصة'] || 'غير محدد' // 🚀 إضافة الحصة
       })).filter(t => t.name && t.day); 
+      
       if (teachersList.length === 0) throw new Error("لم يتم العثور على بيانات صحيحة.");
       setUploadStatus({ type: 'idle', msg: `تم استخراج ${teachersList.length} معلم، جاري الإرسال للسحابة...` });
       const response = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: "bulk_upload_teachers", schoolCode: schoolCode, teachers: teachersList }) });
@@ -725,8 +677,8 @@ function SettingsPage({ schoolCode, schoolName, setSchoolName }: any) {
         <div className="bg-white/60 backdrop-blur-2xl rounded-[2rem] p-6 sm:p-8 border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><Users className="text-blue-500" size={24} /> إدارة المعلمين المرجعية</h3>
           <p className="text-slate-500 font-bold text-sm mb-6 leading-relaxed">
-            قم برفع ملف Excel (.xlsx) يحتوي على 3 أعمدة رئيسية: <br/>
-            <span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded mx-1">اسم المعلم</span><span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded mx-1">الفصل</span><span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded mx-1">اليوم</span>
+            قم برفع ملف Excel (.xlsx) يحتوي على 4 أعمدة رئيسية: <br/>
+            <span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded mx-1">اسم المعلم</span><span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded mx-1">الفصل</span><span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded mx-1">اليوم</span><span className="text-indigo-600 bg-indigo-50 px-2 py-1 rounded mx-1">الحصة</span>
           </p>
           <div className="relative border-2 border-dashed border-indigo-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-indigo-50/30 hover:bg-indigo-50/80 transition-colors group">
             {isUploading ? (
