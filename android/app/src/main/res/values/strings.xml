@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">راصد الإدارة</string>
+    <string name="title_activity_main">راصد الإدارة</string>
+    <string name="package_name">om.alzaabi.rasedadmin</string>
+    <string name="custom_url_scheme">om.alzaabi.rasedadmin</string>
+</resources>
