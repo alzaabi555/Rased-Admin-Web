@@ -27,6 +27,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Verify Java
+        run: java -version
+
       - name: Install dependencies
         run: npm install --include=optional
 
@@ -36,11 +39,14 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
+      - name: Verify Gradle wrapper
+        run: cat android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Grant Gradle permission
         run: chmod +x android/gradlew
 
       - name: Build Debug APK
-        run: cd android && ./gradlew assembleDebug
+        run: cd android && ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
