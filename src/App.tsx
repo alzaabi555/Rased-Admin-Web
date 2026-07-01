@@ -30,7 +30,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 
-import { AdminProvider, useAdmin } from './context/AdminContext';
+import { AdminProvider, useAdmin } from '../context/AdminContext';
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwZHhZ-RPWUpBGIlw0qTFPUmOPmq9WpcvW4WLklcjb_A9U3MW0luIXYPnHznI29ThpbMA/exec';
 
