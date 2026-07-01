@@ -30,6 +30,13 @@ jobs:
       - name: Verify Java
         run: java -version
 
+      - name: Install Android SDK 35
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Remove local Android SDK path
+        run: rm -f android/local.properties
+
       - name: Install dependencies
         run: npm install --include=optional
 
