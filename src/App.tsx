@@ -133,7 +133,7 @@ export default function App() {
 }
 
 function AdminDashboardCore() {
-  const { dashboardData, setDashboardData } = useAdmin();
+const { dashboardData, setDashboardData, isDataLoaded } = useAdmin();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [schoolCode, setSchoolCode] = useState(() => localStorage.getItem('rased_admin_code') || '');
   const [schoolName, setSchoolName] = useState(() => localStorage.getItem('rased_school_name') || '');
@@ -197,7 +197,16 @@ function AdminDashboardCore() {
     setActiveSection('dashboard'); 
     setIsSubsLoaded(false); // مسح الذاكرة عند تسجيل الخروج
   };
-
+if (!isDataLoaded) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50" dir="rtl">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
+        <p className="text-sm font-black text-slate-500">جاري تحميل أرشيف راصد الإدارة...</p>
+      </div>
+    </div>
+  );
+}
   if (!isLoggedIn) return <LoginScreen schoolCode={schoolCode} setSchoolCode={setSchoolCode} onLogin={handleLogin} isLoading={isLoading} errorMsg={errorMsg} />;
 
   return (
