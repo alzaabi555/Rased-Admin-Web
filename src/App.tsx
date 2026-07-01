@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowLeft,
   School,
   LogOut,
   Users,
@@ -20,15 +21,18 @@ import {
   RefreshCw,
   Wifi,
   Database,
-  BarChart3,
   Menu,
-  X,
-  Activity,
   UserCheck,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Code
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 import { AdminProvider, useAdmin } from '../context/AdminContext';
 
@@ -100,7 +104,112 @@ const uniqueBy = <T,>(items: T[], keyGetter: (item: T) => string) => {
   return Array.from(map.values());
 };
 
-const generateOfficialReport = (
+const sanitizeFileName = (name: string) =>
+  String(name || 'report')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, '_')
+    .slice(0, 80);
+
+const dataUrlToBase64 = (dataUrl: string) => {
+  const parts = dataUrl.split(',');
+  return parts.length > 1 ? parts[1] : dataUrl;
+};
+
+const extractReportBody = (htmlContent: string) => {
+  const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  return bodyMatch ? bodyMatch[1] : htmlContent;
+};
+
+const extractReportStyles = (htmlContent: string) => {
+  const styleMatches = Array.from(htmlContent.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi));
+  return styleMatches.map(match => match[1]).join('\n');
+};
+
+const createPdfFromHtml = async (
+  htmlContent: string,
+  title: string,
+  orientation: 'portrait' | 'landscape' = 'portrait'
+) => {
+  const container = document.createElement('div');
+  container.setAttribute('dir', 'rtl');
+  container.style.position = 'fixed';
+  container.style.left = '-10000px';
+  container.style.top = '0';
+  container.style.width = orientation === 'landscape' ? '1123px' : '794px';
+  container.style.background = '#ffffff';
+  container.style.zIndex = '-1';
+  container.style.padding = orientation === 'landscape' ? '38px' : '56px';
+  container.style.boxSizing = 'border-box';
+  container.innerHTML = `<style>${extractReportStyles(htmlContent)}</style>${extractReportBody(htmlContent)}`;
+  document.body.appendChild(container);
+
+  try {
+    await new Promise(resolve => setTimeout(resolve, 350));
+
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    });
+
+    const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4', compress: true });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    return pdf;
+  } finally {
+    document.body.removeChild(container);
+  }
+};
+
+const outputOfficialPdf = async (
+  htmlContent: string,
+  title: string,
+  orientation: 'portrait' | 'landscape' = 'portrait'
+) => {
+  const pdf = await createPdfFromHtml(htmlContent, title, orientation);
+  const fileName = `${sanitizeFileName(title)}_${Date.now()}.pdf`;
+
+  if (Capacitor.isNativePlatform()) {
+    const dataUri = pdf.output('datauristring');
+    const base64Data = dataUrlToBase64(dataUri);
+
+    const savedFile = await Filesystem.writeFile({
+      path: fileName,
+      data: base64Data,
+      directory: Directory.Cache
+    });
+
+    await Share.share({
+      title,
+      text: 'تقرير رسمي صادر من راصد الإدارة بصيغة PDF.',
+      url: savedFile.uri,
+      dialogTitle: 'فتح / مشاركة تقرير راصد الإدارة PDF'
+    });
+    return;
+  }
+
+  pdf.save(fileName);
+};
+
+const generateOfficialReport = async (
   title: string,
   dataList: any[],
   schoolName: string,
@@ -119,7 +228,7 @@ const generateOfficialReport = (
       tableContent += type === 'students'
         ? `<tr>
              <td>${index + 1}</td>
-             <td style="font-weight: bold;">${item.name}</td>
+             <td style="font-weight: bold;">${item.name || ''}</td>
              <td>${item.type || 'غياب / تأخير'}</td>
              <td>${item.className || ''}</td>
              <td>${item.teacher || ''}</td>
@@ -127,7 +236,7 @@ const generateOfficialReport = (
            </tr>`
         : `<tr>
              <td>${index + 1}</td>
-             <td style="font-weight: bold; text-align: right; padding-right: 20px;">${item.name}</td>
+             <td style="font-weight: bold; text-align: right; padding-right: 20px;">${item.name || ''}</td>
              <td>${item.className || ''}</td>
              <td style="color: red; font-weight: bold;">لم يتم الرصد</td>
            </tr>`;
@@ -139,54 +248,37 @@ const generateOfficialReport = (
     <head>
       <title>تقرير نظام راصد - ${title}</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;900&display=swap');
-        @page { size: A4; margin: 15mm; }
-        body { font-family: 'Tajawal', Tahoma, sans-serif; color: #000; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+        body { font-family: Tahoma, Arial, sans-serif; color: #000; margin: 0; padding: 0; -webkit-print-color-adjust: exact; background: #fff; }
+        .report-page { width: 100%; box-sizing: border-box; }
         .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 30px; }
         .right-header { text-align: right; font-weight: 900; line-height: 1.6; font-size: 13pt; }
         .left-header { text-align: left; font-weight: 700; line-height: 1.6; font-size: 12pt; }
         .title { text-align: center; font-size: 18pt; font-weight: 900; margin: 30px 0; text-decoration: underline; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 40px; font-size: 12pt; }
-        th, td { border: 1px solid #000; padding: 10px 8px; text-align: center; }
+        th, td { border: 1px solid #000; padding: 10px 8px; text-align: center; vertical-align: middle; }
         th { background-color: #f1f5f9; font-weight: 900; font-size: 13pt; }
         .signatures { display: flex; justify-content: space-between; margin-top: 70px; font-weight: 900; font-size: 14pt; padding: 0 20px; }
         .footer-note { text-align: center; font-size: 9pt; font-weight: bold; color: #64748b; margin-top: 50px; border-top: 1px solid #cbd5e1; padding-top: 10px; }
       </style>
     </head>
     <body>
-       <div class="header">
-          <div class="right-header">سلطنة عُمان<br>وزارة التعليم<br>المديرية العامة للتعليم بمحافظة شمال الباطنة</div>
-          <div class="left-header">المدرسة: ${schoolName || '____________________'}<br>التاريخ: ${dateStr}<br>النظام: راصد الإدارة</div>
-       </div>
-       <div class="title">${title}</div>
-       <table><thead>${tableHeader}</thead><tbody>${tableContent}</tbody></table>
-       <div class="signatures">
-         ${type === 'students' ? '<div>مُعد التقرير: ........................</div>' : '<div>الختم الرسمي:</div>'}
-         <div>يعتمد، مدير المدرسة: ........................</div>
-       </div>
-       <div class="footer-note">تم استخراج هذا التقرير إلكترونياً من نظام راصد - برمجة وتطوير: ALZAABI MOHAMMAD</div>
+      <div class="report-page">
+        <div class="header">
+            <div class="right-header">سلطنة عُمان<br>وزارة التعليم<br>المديرية العامة للتعليم بمحافظة شمال الباطنة</div>
+            <div class="left-header">المدرسة: ${schoolName || '____________________'}<br>التاريخ: ${dateStr}<br>النظام: راصد الإدارة</div>
+        </div>
+        <div class="title">${title}</div>
+        <table><thead>${tableHeader}</thead><tbody>${tableContent}</tbody></table>
+        <div class="signatures">
+          ${type === 'students' ? '<div>مُعد التقرير: ........................</div>' : '<div>الختم الرسمي:</div>'}
+          <div>يعتمد، مدير المدرسة: ........................</div>
+        </div>
+        <div class="footer-note">تم استخراج هذا التقرير إلكترونياً من نظام راصد - برمجة وتطوير: ALZAABI MOHAMMAD</div>
+      </div>
     </body>
     </html>`;
 
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'absolute';
-  iframe.style.width = '0px';
-  iframe.style.height = '0px';
-  iframe.style.border = 'none';
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (doc) {
-    doc.open();
-    doc.write(htmlContent);
-    doc.close();
-  }
-
-  setTimeout(() => {
-    iframe.contentWindow?.focus();
-    iframe.contentWindow?.print();
-    setTimeout(() => document.body.removeChild(iframe), 2000);
-  }, 500);
+  await outputOfficialPdf(htmlContent, title, 'portrait');
 };
 
 export default function App() {
@@ -238,7 +330,7 @@ function AdminDashboardCore() {
     } catch (error) {
       if (dashboardData?.logs?.length > 0 || dashboardData?.teachers?.length > 0) {
         setIsLoggedIn(true);
-        alert("⚠️ تعذر الاتصال بالسحابة. يتم عرض النسخة المؤرشفة محليًا.");
+        alert('⚠️ تعذر الاتصال بالسحابة. يتم عرض النسخة المؤرشفة محليًا.');
       } else {
         setErrorMsg('تأكد من اتصالك بالإنترنت ومن صحة رابط السحابة');
       }
@@ -447,12 +539,12 @@ function DashboardHome({ data, schoolName }: { data: DashboardData; schoolName: 
   const completionRate = expectedTeachersToday.length === 0 ? 0 : Math.min(100, Math.round((uniqueTodayLogs.length / expectedTeachersToday.length) * 100));
   const activeListData = activeTab === 'absent' ? allAbsent : activeTab === 'late' ? allLate : allTruant;
 
-  const handlePrintDaily = () => {
-    generateOfficialReport('التقرير اليومي لرصد المخالفات', [...allAbsent, ...allLate, ...allTruant], schoolName, todayDate.toLocaleDateString('ar-OM'), 'students');
+  const handlePrintDaily = async () => {
+    await generateOfficialReport('التقرير اليومي لرصد المخالفات', [...allAbsent, ...allLate, ...allTruant], schoolName, todayDate.toLocaleDateString('ar-OM'), 'students');
   };
 
-  const handlePrintLateTeachers = () => {
-    generateOfficialReport('كشف المعلمين المتأخرين عن رصد غياب الحصة الأولى', lateTeachers, schoolName, todayDate.toLocaleDateString('ar-OM'), 'teachers');
+  const handlePrintLateTeachers = async () => {
+    await generateOfficialReport('كشف المعلمين المتأخرين عن رصد غياب الحصة الأولى', lateTeachers, schoolName, todayDate.toLocaleDateString('ar-OM'), 'teachers');
   };
 
   return (
@@ -465,7 +557,7 @@ function DashboardHome({ data, schoolName }: { data: DashboardData; schoolName: 
         <div className="flex items-center gap-3 flex-wrap">
           <div className="bg-amber-400 text-indigo-950 font-black px-4 py-2 rounded-xl">{expectedTeachersToday.length} معلم مستهدف</div>
           <button onClick={handlePrintDaily} className="flex items-center gap-2 bg-white text-indigo-900 px-4 py-2 rounded-xl font-bold hover:bg-slate-100 transition shadow-sm active:scale-95">
-            <Printer size={18} /> طباعة التقرير الرسمي
+            <Printer size={18} /> استخراج PDF رسمي
           </button>
         </div>
       </div>
@@ -481,7 +573,7 @@ function DashboardHome({ data, schoolName }: { data: DashboardData; schoolName: 
         <div className="xl:col-span-4 flex flex-col gap-4">
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-3"><AlertTriangle className="text-rose-500" size={24} /><h2 className="text-xl font-black text-slate-800">تأخر رصد اليوم</h2></div>
-            {lateTeachers.length > 0 && <button onClick={handlePrintLateTeachers} className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"><Printer size={14} /> طباعة الكشف</button>}
+            {lateTeachers.length > 0 && <button onClick={handlePrintLateTeachers} className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"><Printer size={14} /> PDF الكشف</button>}
           </div>
           <div className="bg-white/60 backdrop-blur-2xl rounded-[2rem] p-6 border border-white/80 shadow-md flex-1 overflow-y-auto max-h-[500px] custom-scrollbar">
             {lateTeachers.length === 0 ? <div className="py-10 text-center text-emerald-600 font-bold"><CheckCircle2 size={40} className="mx-auto mb-3" />اكتمل الرصد!</div> : (
@@ -538,10 +630,11 @@ function SubstitutionsRadar({ schoolName, data, isLoading, onFetch }: { schoolNa
     return Object.keys(grouped).map(absentName => ({ absentName, department: grouped[absentName].department, periods: grouped[absentName].periods }));
   }, [data]);
 
-  const printMatrixReport = () => {
+  const printMatrixReport = async () => {
     let tableRows = '';
-    if (matrixData.length === 0) tableRows = `<tr><td colspan="9" style="text-align:center; padding: 20px;">لا توجد حصص احتياط مسجلة لهذا اليوم.</td></tr>`;
-    else {
+    if (matrixData.length === 0) {
+      tableRows = `<tr><td colspan="9" style="text-align:center; padding: 20px;">لا توجد حصص احتياط مسجلة لهذا اليوم.</td></tr>`;
+    } else {
       matrixData.forEach((row, idx) => {
         let pCells = '';
         for (let i = 1; i <= 8; i++) {
@@ -554,23 +647,38 @@ function SubstitutionsRadar({ schoolName, data, isLoading, onFetch }: { schoolNa
       });
     }
 
-    const html = `<html dir="rtl" lang="ar"><head><title>سجل الاحتياط اليومي</title><style>@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;900&display=swap'); @page { size: A4 landscape; margin: 10mm; } body { font-family: 'Tajawal', sans-serif; color: #000; -webkit-print-color-adjust: exact; } h2 { text-align: center; text-decoration: underline; margin-bottom: 20px;} table { width: 100%; border-collapse: collapse; text-align: center; } th, td { border: 1px solid #000; padding: 8px; } th { background-color: #cbd5e1; font-weight: 900; } .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; font-weight:bold;}</style></head><body><div class="header"><div>المدرسة: ${schoolName}</div><div>التاريخ: ${new Date().toLocaleDateString('ar-OM')}</div></div><h2>سجل توزيع حصص الاحتياط اليومي (مصفوفة الإدارة)</h2><table><thead><tr><th style="width:20%">المعلم الغائب</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead><tbody>${tableRows}</tbody></table><div style="margin-top:40px; display:flex; justify-content:space-between; font-weight:bold;"><div>إعداد المناوب الإداري: ....................</div><div>يعتمد، مدير المدرسة: ....................</div></div></body></html>`;
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.width = '0px';
-    iframe.style.height = '0px';
-    iframe.style.border = 'none';
-    document.body.appendChild(iframe);
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (doc) { doc.open(); doc.write(html); doc.close(); }
-    setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); setTimeout(() => document.body.removeChild(iframe), 2000); }, 500);
+    const html = `
+      <html dir="rtl" lang="ar">
+      <head>
+        <title>سجل الاحتياط اليومي</title>
+        <style>
+          body { font-family: Tahoma, Arial, sans-serif; color: #000; background: #fff; -webkit-print-color-adjust: exact; }
+          .report-page { width: 100%; box-sizing: border-box; }
+          h2 { text-align: center; text-decoration: underline; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; text-align: center; font-size: 10pt; }
+          th, td { border: 1px solid #000; padding: 8px; vertical-align: middle; }
+          th { background-color: #cbd5e1; font-weight: 900; }
+          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; font-weight:bold; }
+        </style>
+      </head>
+      <body>
+        <div class="report-page">
+          <div class="header"><div>المدرسة: ${schoolName || '____________________'}</div><div>التاريخ: ${new Date().toLocaleDateString('ar-OM')}</div></div>
+          <h2>سجل توزيع حصص الاحتياط اليومي (مصفوفة الإدارة)</h2>
+          <table><thead><tr><th style="width:20%">المعلم الغائب</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th></tr></thead><tbody>${tableRows}</tbody></table>
+          <div style="margin-top:40px; display:flex; justify-content:space-between; font-weight:bold;"><div>إعداد المناوب الإداري: ....................</div><div>يعتمد، مدير المدرسة: ....................</div></div>
+        </div>
+      </body>
+      </html>`;
+
+    await outputOfficialPdf(html, 'سجل توزيع حصص الاحتياط اليومي', 'landscape');
   };
 
   return (
     <div className="space-y-6 pb-10 h-full flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
         <div className="flex items-center gap-3"><ShieldCheck className="text-emerald-600" size={32} /><div><h2 className="text-2xl font-black text-slate-800">رادار الاحتياط الشامل</h2><p className="text-sm font-bold text-slate-500">متابعة حية لتكليفات المعلمين الأوائل وتنفيذها</p></div></div>
-        <div className="flex items-center gap-3"><button onClick={() => onFetch(true)} className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm"><RefreshCw className={`text-slate-600 ${isLoading ? 'animate-spin' : ''}`} size={20} /></button><button onClick={printMatrixReport} className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-3 rounded-xl font-black hover:bg-emerald-700 transition shadow-lg active:scale-95"><Printer size={20} /> طباعة مصفوفة الاحتياط</button></div>
+        <div className="flex items-center gap-3"><button onClick={() => onFetch(true)} className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm"><RefreshCw className={`text-slate-600 ${isLoading ? 'animate-spin' : ''}`} size={20} /></button><button onClick={printMatrixReport} className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-3 rounded-xl font-black hover:bg-emerald-700 transition shadow-lg active:scale-95"><Printer size={20} /> PDF مصفوفة الاحتياط</button></div>
       </div>
 
       <div className="bg-white/70 backdrop-blur-2xl rounded-[2rem] border border-white shadow-lg flex-1 overflow-hidden flex flex-col">
@@ -618,20 +726,22 @@ function ReportsPage({ data, schoolName }: { data: DashboardData; schoolName: st
     });
   }, [data, selectedDateStr]);
 
-  const handlePrintArchive = () => {
+  const handlePrintArchive = async () => {
     const combinedData: any[] = [];
     reportData.forEach((row: any) => {
       if (row.status === 'مكتمل') {
         const extract = (str: string, type: string) => splitList(str).forEach(name => combinedData.push({ name, type, teacher: row.name, className: row.className, time: row.time }));
-        extract(row.absents, 'غياب'); extract(row.lates, 'تأخير'); extract(row.truants, 'تسرب');
+        extract(row.absents, 'غياب');
+        extract(row.lates, 'تأخير');
+        extract(row.truants, 'تسرب');
       }
     });
-    generateOfficialReport('التقرير الأرشيفي الشامل لغياب ومخالفات الطلاب', combinedData, schoolName, new Date(selectedDateStr).toLocaleDateString('ar-OM'), 'students');
+    await generateOfficialReport('التقرير الأرشيفي الشامل لغياب ومخالفات الطلاب', combinedData, schoolName, new Date(selectedDateStr).toLocaleDateString('ar-OM'), 'students');
   };
 
   return (
     <div className="space-y-6 pb-10 h-full flex flex-col">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2"><div className="flex items-center gap-3"><FileText className="text-indigo-500" size={28} /><h2 className="text-2xl font-black text-slate-800">أرشيف التقارير</h2></div><div className="flex items-center gap-3"><div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200"><CalendarIcon size={20} className="text-indigo-500" /><input type="date" value={selectedDateStr} onChange={(e) => setSelectedDateStr(e.target.value)} className="bg-transparent font-bold text-slate-700 outline-none" /></div><button onClick={handlePrintArchive} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 transition shadow-sm active:scale-95"><Printer size={18} /> استخراج رسمي</button></div></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2"><div className="flex items-center gap-3"><FileText className="text-indigo-500" size={28} /><h2 className="text-2xl font-black text-slate-800">أرشيف التقارير</h2></div><div className="flex items-center gap-3"><div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200"><CalendarIcon size={20} className="text-indigo-500" /><input type="date" value={selectedDateStr} onChange={(e) => setSelectedDateStr(e.target.value)} className="bg-transparent font-bold text-slate-700 outline-none" /></div><button onClick={handlePrintArchive} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 transition shadow-sm active:scale-95"><Printer size={18} /> استخراج PDF رسمي</button></div></div>
       <div className="bg-white/70 backdrop-blur-2xl rounded-[2rem] p-6 border border-white shadow-lg flex-1 overflow-hidden flex flex-col"><div className="overflow-x-auto flex-1 custom-scrollbar"><table className="w-full text-right border-collapse min-w-[800px]"><thead className="bg-slate-100/80 border-b border-slate-200 sticky top-0 z-10"><tr><th className="p-4 font-black text-slate-600">المعلم</th><th className="p-4 font-black text-slate-600">الفصل</th><th className="p-4 font-black text-slate-600 text-center">الرصد</th><th className="p-4 font-black text-slate-600">تفاصيل المخالفات</th><th className="p-4 font-black text-slate-600">الوقت</th></tr></thead><tbody className="divide-y divide-slate-100">{reportData.length === 0 ? <tr><td colSpan={5} className="py-10 text-center font-bold text-slate-400">لا يوجد معلمين مسندين لهذا اليوم.</td></tr> : reportData.map((row: any, idx: number) => <tr key={idx} className="hover:bg-slate-50 transition-colors"><td className="p-4 font-black text-indigo-900">{row.name}</td><td className="p-4 font-bold text-slate-600">{row.className}</td><td className="p-4 text-center"><span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold ${row.status === 'مكتمل' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{row.status === 'مكتمل' ? <CheckCircle2 size={14} /> : <Clock size={14} />} {row.status}</span></td><td className="p-4 text-sm font-bold text-slate-600"><div className="flex flex-col gap-1 items-start">{splitList(row.absents).length > 0 && <span className="bg-rose-50 text-rose-700 px-2 py-1 rounded-md text-xs border border-rose-100 w-fit">🔴 غياب: {row.absents}</span>}{splitList(row.lates).length > 0 && <span className="bg-amber-50 text-amber-700 px-2 py-1 rounded-md text-xs border border-amber-100 w-fit">🟠 تأخير: {row.lates}</span>}{splitList(row.truants).length > 0 && <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded-md text-xs border border-purple-100 w-fit">🟣 تسرب: {row.truants}</span>}{splitList(row.absents).length === 0 && splitList(row.lates).length === 0 && splitList(row.truants).length === 0 && row.status === 'مكتمل' && <span className="text-emerald-500 font-bold bg-emerald-50 px-2 py-1 rounded-md text-xs">✔️ لا توجد مخالفات</span>}</div></td><td className="p-4 text-slate-500 text-sm font-mono">{row.time}</td></tr>)}</tbody></table></div></div>
     </div>
   );
@@ -702,12 +812,46 @@ function StatCard({ title, value, subtitle, icon: Icon, color }: any) {
 
 function LoginScreen({ schoolCode, setSchoolCode, onLogin, isLoading, errorMsg }: any) {
   return (
-    <div className="min-h-screen flex items-center justify-center relative bg-slate-50" dir="rtl">
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950" />
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="relative z-10 w-full max-w-lg p-8 sm:p-12 bg-white/10 backdrop-blur-2xl rounded-[2.5rem] border border-white/20 shadow-2xl mx-4">
-        <div className="flex flex-col items-center mb-10"><div className="bg-gradient-to-br from-amber-400 to-amber-600 p-4 rounded-3xl mb-6"><School size={48} className="text-white" /></div><h1 className="text-4xl font-black text-white mb-2">راصد الإدارة</h1><p className="text-indigo-200">نظام المتابعة الذكي للقيادة المدرسية</p></div>
-        <form onSubmit={onLogin} className="space-y-6"><input type="text" value={schoolCode} onChange={(e) => setSchoolCode(e.target.value)} className="w-full px-6 py-4 rounded-2xl bg-white/10 border border-white/20 text-white text-center text-3xl font-mono outline-none focus:border-amber-400" placeholder="••••" dir="ltr" />{errorMsg && <p className="text-rose-400 text-center font-bold">{errorMsg}</p>}<button disabled={isLoading} className="w-full bg-amber-500 hover:bg-amber-400 text-indigo-950 font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2">{isLoading ? <><Loader2 className="animate-spin" /> جاري الاتصال...</> : 'تسجيل الدخول'}</button></form>
-      </motion.div>
+    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center font-sans overflow-hidden relative px-6 bg-[#f0f4f8]" dir="rtl">
+      <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[40%] bg-indigo-300/20 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[10%] left-[-10%] w-[40%] h-[50%] bg-blue-300/20 rounded-full blur-[100px] pointer-events-none" />
+
+      <motion.main initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.55 }} className="w-full max-w-md relative z-10 flex flex-col items-center py-10">
+        <div className="text-center mb-8 shrink-0">
+          <div className="inline-flex items-center justify-center p-5 rounded-[2rem] bg-white/80 backdrop-blur-xl mb-6 shadow-xl border border-white/70 text-[#002366]"><School className="w-12 h-12" /></div>
+          <h1 className="text-5xl font-black text-[#002366] tracking-tight mb-2">راصد</h1>
+          <p className="text-slate-500 font-black tracking-wide text-sm">بوابة الإدارة المدرسية</p>
+          <p className="text-[10px] font-bold text-slate-400 mt-2">هوية موحدة لعائلة راصد</p>
+        </div>
+
+        <div className="w-full bg-white/85 backdrop-blur-xl rounded-[2.5rem] p-8 shadow-xl border border-white/70">
+          <div className="text-center mb-6">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 mx-auto flex items-center justify-center text-[#002366] mb-3"><ShieldCheck size={22} /></div>
+            <h2 className="text-xl font-black text-[#002366]">دخول الإدارة</h2>
+            <p className="text-[10px] font-bold text-slate-400 mt-1">أدخل كود المدرسة للاتصال بلوحة القيادة</p>
+          </div>
+
+          <form onSubmit={onLogin} className="space-y-6">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-600 px-1 text-right">كود المدرسة</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-[#002366] z-10"><School className="w-6 h-6" /></div>
+                <input type="text" value={schoolCode} onChange={(e) => setSchoolCode(e.target.value.trim())} className="block w-full pr-14 pl-4 py-4 bg-slate-50 border border-indigo-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 text-[#002366] font-black text-2xl outline-none text-center placeholder:text-slate-300 tracking-[0.25em]" placeholder="••••" required dir="ltr" />
+              </div>
+              {errorMsg && <p className="text-rose-500 text-xs font-bold text-center mt-2 animate-in fade-in">{errorMsg}</p>}
+            </div>
+
+            <button type="submit" disabled={!schoolCode || isLoading} className="w-full bg-[#002366] text-white py-4 rounded-2xl font-black text-base flex items-center justify-center gap-3 shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
+              {isLoading ? <Loader2 className="animate-spin" /> : <><span>دخول آمن</span><ArrowLeft className="w-5 h-5" /></>}
+            </button>
+          </form>
+        </div>
+
+        <div className="mt-8 text-center opacity-60">
+          <p className="text-slate-500 text-[10px] font-bold mb-1">برمجة وتطوير</p>
+          <div className="flex items-center justify-center gap-1.5"><Code size={12} className="text-[#002366]" /><span className="text-[#002366] text-[11px] font-black tracking-widest uppercase">ALZAABI MOHAMMAD</span></div>
+        </div>
+      </motion.main>
     </div>
   );
 }
