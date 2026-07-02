@@ -37,8 +37,14 @@ jobs:
       - name: Remove local Android SDK path
         run: rm -f android/local.properties
 
-      - name: Install dependencies
-        run: npm install --include=optional
+      - name: Clean Windows-only npm artifacts
+  run: |
+    npm pkg delete "dependencies.@tailwindcss/oxide-win32-x64-msvc" || true
+    npm pkg delete "devDependencies.@tailwindcss/oxide-win32-x64-msvc" || true
+    rm -f package-lock.json
+
+- name: Install dependencies
+  run: npm install
 
       - name: Build web app
         run: npm run build
