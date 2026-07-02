@@ -187,25 +187,33 @@ const outputOfficialPdf = async (
   const pdf = await createPdfFromHtml(htmlContent, title, orientation);
   const fileName = `${sanitizeFileName(title)}_${Date.now()}.pdf`;
 
+  // Android / Capacitor: حفظ PDF داخل مستندات التطبيق ثم فتح نافذة المشاركة
   if (Capacitor.isNativePlatform()) {
     const dataUri = pdf.output('datauristring');
     const base64Data = dataUrlToBase64(dataUri);
 
+    // حفظ نسخة دائمة في Documents
     const savedFile = await Filesystem.writeFile({
-      path: fileName,
+      path: `RasedAdminReports/${fileName}`,
       data: base64Data,
-      directory: Directory.Cache
+      directory: Directory.Documents,
+      recursive: true
     });
 
+    alert(`تم حفظ التقرير بنجاح في الجهاز:\n${fileName}`);
+
+    // فتح نافذة المشاركة بعد الحفظ
     await Share.share({
       title,
       text: 'تقرير رسمي صادر من راصد الإدارة بصيغة PDF.',
       url: savedFile.uri,
-      dialogTitle: 'فتح / مشاركة تقرير راصد الإدارة PDF'
+      dialogTitle: 'فتح / مشاركة / طباعة تقرير راصد الإدارة PDF'
     });
+
     return;
   }
 
+  // الويب: تحميل مباشر
   pdf.save(fileName);
 };
 
